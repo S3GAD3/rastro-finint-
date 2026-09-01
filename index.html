@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rastro-finint</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+:root{
+  --bg:#11151a;
+  --bg-panel:#161c22;
+  --bg-raised:#1c2329;
+  --line:#2a333b;
+  --line-soft:#20272e;
+  --text:#e6e4dc;
+  --text-dim:#8f9aa3;
+  --text-faint:#5c6870;
+  --amber:#c9922f;
+  --amber-dim:#8a662a;
+  --teal:#4a8f8c;
+  --red:#b8503f;
+  --green:#5c8a5c;
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+@font-face{font-family:'IBM Plex Sans';src:local('IBM Plex Sans');}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;}
+body{display:flex;min-height:100vh;font-size:14px;}
+::selection{background:var(--amber-dim);color:#fff;}
+
+/* layout */
+#shell{display:flex;width:100%;min-height:100vh;}
+#nav{width:180px;flex:0 0 180px;background:var(--bg-panel);border-right:1px solid var(--line);display:flex;flex-direction:column;}
+#nav .brand{padding:20px 16px 14px;border-bottom:1px solid var(--line);}
+#nav .brand .k{font-family:var(--mono);font-size:11px;color:var(--text-faint);letter-spacing:.5px;}
+#nav .brand .t{font-size:17px;font-weight:600;margin-top:2px;}
+#nav .brand .t span{color:var(--amber);}
+#nav button.tab{
+  display:block;width:100%;text-align:left;background:none;border:none;
+  color:var(--text-dim);padding:13px 16px;font-family:var(--sans);font-size:13px;
+  cursor:pointer;border-left:2px solid transparent;border-bottom:1px solid var(--line-soft);
+}
+#nav button.tab .num{font-family:var(--mono);color:var(--text-faint);margin-right:8px;font-size:11px;}
+#nav button.tab:hover{background:var(--bg-raised);color:var(--text);}
+#nav button.tab.active{color:var(--text);background:var(--bg-raised);border-left-color:var(--amber);}
+#nav .foot{margin-top:auto;padding:14px 16px;font-size:11px;color:var(--text-faint);border-top:1px solid var(--line);line-height:1.5;}
+#main{flex:1;padding:28px 32px 60px;max-width:1180px;}
+.view{display:none;}
+.view.active{display:block;}
+
+h1{font-size:20px;margin:0 0 4px;font-weight:600;}
+h2{font-size:15px;margin:0 0 14px;font-weight:600;color:var(--text);}
+.lede{color:var(--text-dim);font-size:13px;max-width:640px;line-height:1.6;margin-bottom:26px;}
+.panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;padding:20px;margin-bottom:18px;}
+.panel + .panel{margin-top:18px;}
+.row{display:flex;gap:14px;flex-wrap:wrap;}
+.field{flex:1;min-width:220px;margin-bottom:12px;}
+label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;letter-spacing:.2px;}
+input[type=text],input[type=number],textarea,select{
+  width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
+  padding:9px 10px;border-radius:2px;font-family:var(--mono);font-size:13px;
+}
+textarea{font-family:var(--mono);resize:vertical;min-height:80px;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--amber-dim);}
+button.btn{
+  background:var(--amber-dim);color:#fff;border:none;padding:9px 16px;border-radius:2px;
+  font-size:13px;cursor:pointer;font-family:var(--sans);font-weight:500;
+}
+button.btn:hover{background:var(--amber);}
+button.btn.ghost{background:none;border:1px solid var(--line);color:var(--text-dim);}
+button.btn.ghost:hover{color:var(--text);border-color:var(--text-dim);}
+button.btn.small{padding:5px 10px;font-size:12px;}
+a.btn{display:inline-block;text-decoration:none;background:transparent;border:1px solid var(--line);color:var(--text-dim);padding:5px 10px;border-radius:2px;font-size:12px;}
+a.btn:hover{color:var(--text);border-color:var(--text-dim);}
+.result{margin-top:16px;border-top:1px solid var(--line);padding-top:16px;}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:7px 14px;font-size:13px;}
+.kv .k{color:var(--text-dim);}
+.kv .v{font-family:var(--mono);}
+.badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:11px;font-family:var(--mono);}
+.badge.ok{background:rgba(92,138,92,.18);color:#8fbf8f;border:1px solid rgba(92,138,92,.35);}
+.badge.bad{background:rgba(184,80,63,.18);color:#e08a7a;border:1px solid rgba(184,80,63,.35);}
+.badge.warn{background:rgba(201,146,47,.18);color:#e0b566;border:1px solid rgba(201,146,47,.35);}
+.note{font-size:12px;color:var(--text-faint);margin-top:10px;line-height:1.6;border-left:2px solid var(--line);padding-left:10px;}
+.hr{height:1px;background:var(--line);margin:18px 0;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+table th{text-align:left;color:var(--text-dim);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11px;}
+table td{padding:6px 10px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);white-space:nowrap;}
+table tr:hover td{background:var(--bg-raised);}
+.tablewrap{overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:2px;}
+.pos{color:#8fbf8f;}
+.neg{color:#e08a7a;}
+.filedrop{border:1px dashed var(--line);border-radius:3px;padding:26px;text-align:center;color:var(--text-dim);cursor:pointer;font-size:13px;}
+.filedrop:hover{border-color:var(--amber-dim);color:var(--text);}
+.filedrop input{display:none;}
+.tag{font-family:var(--mono);font-size:10.5px;background:var(--bg);border:1px solid var(--line);padding:1px 6px;border-radius:2px;color:var(--text-dim);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media (max-width:900px){.grid2{grid-template-columns:1fr;}#shell{flex-direction:column;}#nav{width:100%;flex:none;flex-direction:row;overflow-x:auto;}#nav .foot{display:none;}#nav .brand{display:none;}#nav button.tab{white-space:nowrap;border-left:none;border-bottom:2px solid transparent;}#nav button.tab.active{border-bottom-color:var(--amber);}#main{padding:18px 16px 60px;}}
+.mapping-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:12px;}
+#graphwrap{background:var(--bg);border:1px solid var(--line);border-radius:3px;}
+.legend{display:flex;gap:16px;font-size:11.5px;color:var(--text-dim);margin-top:8px;flex-wrap:wrap;}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+.stat{background:var(--bg-raised);border:1px solid var(--line);border-radius:2px;padding:10px 14px;min-width:110px;}
+.stat .n{font-family:var(--mono);font-size:19px;}
+.stat .l{font-size:10.5px;color:var(--text-dim);margin-top:2px;}
+.exlist{max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:2px;}
+.exlist .exrow{display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:12px;}
+.exlist .exrow button{background:none;border:none;color:var(--text-faint);cursor:pointer;}
+.summary-text{font-size:13.5px;line-height:1.75;color:var(--text);max-width:760px;}
+.summary-text b{color:var(--amber);font-weight:600;}
+.flag{display:flex;gap:10px;align-items:flex-start;background:var(--bg-raised);border:1px solid var(--line);border-left:2px solid var(--amber-dim);border-radius:2px;padding:9px 12px;margin-top:10px;font-size:12.5px;line-height:1.55;}
+.flag.high{border-left-color:var(--red);}
+.flag .flagicon{font-family:var(--mono);color:var(--text-faint);font-size:11px;flex:0 0 auto;padding-top:1px;}
+#nodeDetail{margin-top:12px;}
+#nodeDetail .panel-mini{background:var(--bg-raised);border:1px solid var(--line);border-radius:2px;padding:12px 14px;}
+
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="nav">
+    <div class="brand">
+      <div class="k">rastro / kit</div>
+      <div class="t">rastro-<span>finint</span></div>
+    </div>
+    <button class="tab active" data-view="inicio"><span class="num">00</span>Inicio</button>
+    <button class="tab" data-view="iban"><span class="num">01</span>Cuentas / IBAN</button>
+    <button class="tab" data-view="bin"><span class="num">02</span>BIN / Tarjetas</button>
+    <button class="tab" data-view="cripto"><span class="num">03</span>Cripto BTC/ETH</button>
+    <button class="tab" data-view="grafo"><span class="num">04</span>Normalizador + Grafo</button>
+    <div class="foot">100% cliente.<br>Sin llamadas de red.<br>Nada se persiste ni sale del navegador.</div>
+  </div>
+
+  <div id="main">
+
+    <!-- INICIO -->
+    <div class="view active" id="v-inicio">
+      <h1>rastro-finint</h1>
+      <p class="lede">Módulo de investigación financiera del kit rastro. Cuatro herramientas independientes que corren enteramente en el navegador: identificación de entidad por cuenta/IBAN, análisis de BIN/tarjeta, verificación de direcciones cripto (BTC/ETH) con importación de trazas, y un normalizador de movimientos bancarios (CSV/XLSX/TXT/Norma 43) que construye un grafo de trazabilidad del dinero.</p>
+      <div class="panel">
+        <h2>Alcance y límites — leer antes de usar</h2>
+        <div class="note" style="border-color:var(--amber-dim);padding-left:12px;">
+          — El módulo IBAN valida checksum y, para España, identifica la entidad con una tabla de códigos parcial y editable (BOE/Banco de España si necesitas certeza total).<br>
+          — El módulo BIN detecta red (Visa/Mastercard/Amex/...) y valida Luhn por algoritmo público; no incluye una base BIN completa incrustada porque no puedo garantizar su exactitud offline — puedes cargar tu propio CSV de rangos BIN para enriquecer la búsqueda localmente.<br>
+          — El módulo cripto valida formato/checksum de direcciones de forma local (Web Crypto para SHA-256, sin red). No consulta saldo ni histórico en vivo — eso requiere un nodo o explorador externo. Para trazabilidad, importa un export CSV/JSON de un explorador (Etherscan, mempool.space, Blockchair, etc.) y el módulo reconstruye el grafo offline.<br>
+          — El normalizador de movimientos incluye un parser de Norma 43 (AEB) por mejor esfuerzo: los anchos de campo pueden variar ligeramente entre bancos emisores, revisa siempre los resultados antes de usarlos como prueba.<br>
+          — Ningún dato introducido se guarda entre sesiones. Al recargar la página se pierde todo. Diseñado así por custodia de la evidencia.
+        </div>
+      </div>
+    </div>
+
+    <!-- IBAN -->
+    <div class="view" id="v-iban">
+      <h1>Cuentas / IBAN</h1>
+      <p class="lede">Valida el dígito de control de un IBAN o de un antiguo CCC español, y localiza la entidad emisora a partir del código de banco.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div class="field" style="flex:2;">
+            <label>IBAN o CCC (con o sin espacios)</label>
+            <input type="text" id="ibanInput" placeholder="ES91 2100 0418 4502 0005 1332  ó  21000418450200051332">
+          </div>
+          <div class="field" style="flex:0 0 140px;align-self:end;margin-bottom:12px;">
+            <button class="btn" onclick="checkIban()">Analizar</button>
+          </div>
+        </div>
+        <div class="result" id="ibanResult" style="display:none;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Tabla de entidades (España) — editable</h2>
+        <p class="note" style="border:none;padding:0;margin-bottom:12px;">Listado parcial de códigos de entidad (4 dígitos) de uso habitual. Añade o corrige códigos según tus fuentes; se usa en vivo para la búsqueda de arriba.</p>
+        <div class="row">
+          <div class="field" style="flex:0 0 100px;"><label>Código</label><input type="text" id="newBankCode" maxlength="4" placeholder="0049"></div>
+          <div class="field" style="flex:2;"><label>Entidad</label><input type="text" id="newBankName" placeholder="Banco Santander, S.A."></div>
+          <div class="field" style="flex:0 0 120px;align-self:end;margin-bottom:12px;"><button class="btn ghost small" onclick="addBankCode()">Añadir / editar</button></div>
+        </div>
+        <div class="tablewrap" style="max-height:260px;">
+          <table id="bankTable"><thead><tr><th>Código</th><th>Entidad</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIN -->
+    <div class="view" id="v-bin">
+      <h1>BIN / Tarjetas</h1>
+      <p class="lede">Valida el número con el algoritmo de Luhn, detecta la red por rango IIN público y, si cargas tu propio listado de BIN, resuelve emisor.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div class="field" style="flex:2;">
+            <label>Número de tarjeta o BIN (6-8 primeros dígitos)</label>
+            <input type="text" id="cardInput" placeholder="4548 8120 xxxx xxxx  ó  454881">
+          </div>
+          <div class="field" style="flex:0 0 140px;align-self:end;margin-bottom:12px;">
+            <button class="btn" onclick="checkCard()">Analizar</button>
+          </div>
+        </div>
+        <div class="result" id="cardResult" style="display:none;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Base de BIN local (opcional)</h2>
+        <p class="note" style="border:none;padding:0;margin-bottom:12px;">Carga un CSV propio con columnas <span class="tag">bin</span> (6-8 dígitos, prefijo), <span class="tag">entidad</span>, <span class="tag">pais</span> (opcional), <span class="tag">tipo</span> (opcional). Se usa para enriquecer la búsqueda de arriba, sin salir del navegador.</p>
+        <div class="filedrop" onclick="document.getElementById('binCsvFile').click()">
+          Cargar CSV de rangos BIN
+          <input type="file" id="binCsvFile" accept=".csv" onchange="loadBinCsv(event)">
+        </div>
+        <div id="binCsvStatus" class="note" style="border:none;padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- CRIPTO -->
+    <div class="view" id="v-cripto">
+      <h1>Cripto — BTC / ETH</h1>
+      <p class="lede">Verificación local de formato y checksum de direcciones (sin consulta a red). Para trazabilidad, importa un export de un explorador y el módulo reconstruye el grafo de movimientos.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div class="field" style="flex:2;">
+            <label>Dirección BTC o ETH</label>
+            <input type="text" id="cryptoInput" placeholder="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa  ó  0x742d35Cc...">
+          </div>
+          <div class="field" style="flex:0 0 140px;align-self:end;margin-bottom:12px;">
+            <button class="btn" onclick="checkCrypto()">Analizar</button>
+          </div>
+        </div>
+        <div class="result" id="cryptoResult" style="display:none;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Directorio local de direcciones conocidas (exchanges, etc.)</h2>
+        <p class="note" style="border:none;padding:0;margin-bottom:12px;">Mantén aquí tus propias direcciones verificadas (hot wallets de exchanges, sospechosos identificados...). Se usa para etiquetar automáticamente nodos en el grafo de abajo. Vive solo en esta sesión.</p>
+        <div class="row">
+          <div class="field" style="flex:2;"><label>Dirección</label><input type="text" id="exAddr" placeholder="0x... / bc1..."></div>
+          <div class="field" style="flex:1;"><label>Etiqueta</label><input type="text" id="exLabel" placeholder="Binance hot wallet 14"></div>
+          <div class="field" style="flex:0 0 100px;align-self:end;margin-bottom:12px;"><button class="btn ghost small" onclick="addExchangeAddr()">Añadir</button></div>
+        </div>
+        <div class="exlist" id="exchangeList"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Importar traza (export de explorador)</h2>
+        <p class="note" style="border:none;padding:0;margin-bottom:12px;">
+          Pega aquí un CSV o JSON exportado de un explorador de bloques (p.ej. CSV de Etherscan/mempool.space/Blockchair con columnas tipo <span class="tag">hash</span>, <span class="tag">from</span>, <span class="tag">to</span>, <span class="tag">value</span>, <span class="tag">timestamp</span>). El módulo detecta columnas automáticamente y construye el grafo dirigido.
+        </p>
+        <textarea id="cryptoTraceInput" placeholder="Pega aquí el CSV o JSON exportado..."></textarea>
+        <div style="margin-top:10px;"><button class="btn" onclick="buildCryptoGraph()">Construir grafo</button></div>
+        <div id="cryptoGraphStats" class="row" style="margin-top:14px;"></div>
+        <div id="cryptoGraphWrap" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- GRAFO -->
+    <div class="view" id="v-grafo">
+      <h1>Normalizador + Grafo de movimientos</h1>
+      <p class="lede">Sube extractos bancarios en CSV, XLSX, TXT o Norma 43 (AEB). El módulo detecta el formato, normaliza los movimientos, redacta un resumen del análisis en lenguaje natural, señala patrones que pueden merecer revisión y construye un grafo dirigido de la trazabilidad del dinero.</p>
+
+      <div class="panel">
+        <div class="field" style="max-width:520px;">
+          <label>Cuenta investigada — nodo central del grafo</label>
+          <input type="text" id="investigatedAccountInput" placeholder="ES00 0000 0000 0000 0000 0000" oninput="buildTxGraph()">
+          <div class="note" style="border:0;padding:0;">Introduce la cuenta a la que pertenece el extracto. Si el extracto cubre varias cuentas propias, sepáralas con comas — todas se representarán como el mismo nodo central. No se intenta deducir desde las columnas del archivo.</div>
+        </div>
+        <div class="filedrop" onclick="document.getElementById('bankFile').click()">
+          Arrastra o selecciona un archivo (.csv, .txt, .xlsx, .xls)
+          <input type="file" id="bankFile" accept=".csv,.txt,.xlsx,.xls" onchange="handleBankFile(event)">
+        </div>
+        <div id="bankFileStatus" class="note" style="border:none;padding:0;"></div>
+      </div>
+
+      <div class="panel" id="mappingPanel" style="display:none;">
+        <h2>Mapeo de columnas</h2>
+        <p class="note" style="border:none;padding:0;margin-bottom:10px;">Detección automática. Corrige si algo no encaja y pulsa Normalizar.</p>
+        <div id="mappingRows"></div>
+        <div style="margin-top:14px;"><button class="btn" onclick="normalizeTransactions()">Normalizar movimientos</button></div>
+      </div>
+
+      <div class="panel" id="statsPanel" style="display:none;">
+        <div class="row" id="statsRow"></div>
+      </div>
+
+      <div class="panel" id="summaryPanel" style="display:none;">
+        <h2>Resumen del análisis</h2>
+        <div id="summaryText" class="summary-text"></div>
+        <div id="summaryFlags"></div>
+      </div>
+
+      <div class="panel" id="graphPanel" style="display:none;">
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:2px;">
+          <h2 style="margin-bottom:0;">Grafo de trazabilidad</h2>
+          <div class="row" style="gap:8px;">
+            <select id="graphModeSelect" onchange="onGraphModeChange()" style="width:auto;font-size:12px;padding:5px 8px;">
+              <option value="all">Todos los movimientos (entradas + salidas)</option>
+              <option value="in">Solo entradas</option>
+              <option value="out">Solo salidas</option>
+              <option value="manual">Selección manual (tabla de abajo)</option>
+            </select>
+            <select id="graphMinFilter" onchange="buildTxGraph()" style="width:auto;font-size:12px;padding:5px 8px;">
+              <option value="0">Mostrar todo importe</option>
+              <option value="100">Ocultar &lt; 100</option>
+              <option value="1000">Ocultar &lt; 1.000</option>
+              <option value="3000">Ocultar &lt; 3.000</option>
+            </select>
+            <label style="font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:5px;white-space:nowrap;">
+              <input type="checkbox" id="graphAggregate" onchange="buildTxGraph()"> agrupar movimientos repetidos
+            </label>
+            <button class="btn ghost small" onclick="clearTableFilter()">quitar selección de nodo</button>
+          </div>
+        </div>
+        <div id="graphModeHint" class="note" style="border:0;padding:0;display:none;">Marca las transacciones que quieras incluir en la tabla de abajo (columna izquierda) y pulsa "Aplicar selección al grafo". Puedes usar los botones de marcado rápido de la tabla.</div>
+        <div class="legend">
+          <span><span class="dot" style="background:#5c8a5c;"></span>Entrada (dinero hacia la cuenta investigada)</span>
+          <span><span class="dot" style="background:#b8503f;"></span>Salida (dinero desde la cuenta investigada)</span>
+          <span><span class="dot" style="background:#c9922f;"></span>Cuenta investigada (siempre en el centro)</span>
+          <span>por defecto, cada flecha = un movimiento individual · grosor = importe · tamaño de nodo = volumen total</span>
+        </div>
+        <div id="graphwrap"></div>
+        <p class="note">Arrastra los nodos para reordenar, rueda del ratón para zoom. Pasa el ratón sobre una flecha para ver fecha/importe/concepto de ese movimiento concreto. Clic en un nodo para ver el detalle a la derecha y filtrar la tabla.</p>
+        <div id="nodeDetail"></div>
+      </div>
+
+      <div class="panel" id="rankingPanel" style="display:none;">
+        <h2>Principales contrapartes</h2>
+        <div class="tablewrap" style="max-height:340px;">
+          <table id="rankingTable"><thead><tr><th>Contraparte</th><th>Entradas</th><th>Salidas</th><th>Neto</th><th>Movs.</th><th>1ª op.</th><th>Última op.</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <div class="panel" id="tablePanel" style="display:none;">
+        <h2>Movimientos normalizados <span id="tableFilterTag" class="tag" style="display:none;"></span> <button class="btn ghost small" onclick="clearTableFilter()" id="clearFilterBtn" style="display:none;">quitar filtro</button></h2>
+        <div class="row" style="margin-bottom:10px;align-items:center;">
+          <div class="field" style="flex:1;max-width:280px;"><input type="text" id="txSearch" placeholder="Buscar en concepto / contraparte..." oninput="renderTxTable()"></div>
+          <div class="field" style="flex:0 0 auto;align-self:center;"><button class="btn ghost small" onclick="exportNormalized()">Exportar CSV normalizado</button></div>
+          <div class="field" style="flex:0 0 auto;align-self:center;" id="manualSelectControls">
+            <span id="selCounter" class="tag" style="margin-right:6px;"></span>
+            <button class="btn ghost small" onclick="selectAllVisible(true)">marcar visibles</button>
+            <button class="btn ghost small" onclick="selectAllVisible(false)">desmarcar visibles</button>
+            <button class="btn small" onclick="buildTxGraph()">Aplicar selección al grafo</button>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table id="txTable"><thead><tr><th style="width:26px;"><input type="checkbox" id="txSelectAllHead" onchange="selectAllVisible(this.checked)"></th><th>Fecha</th><th>Cuenta</th><th>Contraparte</th><th>Concepto</th><th>Importe</th><th>Saldo</th><th>Origen</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ======================= NAV ======================= */
+document.querySelectorAll('#nav .tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('#nav .tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('v-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+/* ======================= UTILIDADES CRIPTO / HASH ======================= */
+async function sha256(bytes){
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return new Uint8Array(digest);
+}
+async function sha256d(bytes){ return sha256(await sha256(bytes)); }
+
+function parseMoney(value){
+  if(typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if(value === null || value === undefined) return 0;
+  let s = String(value).trim();
+  if(!s) return 0;
+  const negative = /^\s*\(.*\)\s*$/.test(s) || /^\s*-/.test(s) || /-\s*$/.test(s);
+  s = s.replace(/[()]/g,'').replace(/[^0-9,.'-]/g,'').replace(/'/g,'').replace(/-/g,'');
+  const comma = s.lastIndexOf(','), dot = s.lastIndexOf('.');
+  if(comma >= 0 && dot >= 0){
+    const decimal = comma > dot ? ',' : '.';
+    const thousands = decimal === ',' ? /\./g : /,/g;
+    s = s.replace(thousands,'').replace(decimal,'.');
+  } else if(comma >= 0){
+    const decimals = s.length - comma - 1;
+    s = decimals === 3 && /^\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g,'') : s.replace(/,/g,'.');
+  } else if(dot >= 0){
+    const decimals = s.length - dot - 1;
+    if(decimals === 3 && /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g,'');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? (negative ? -Math.abs(n) : n) : 0;
+}
+
+const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function base58decode(str){
+  let num = 0n;
+  for(const ch of str){
+    const idx = B58_ALPHABET.indexOf(ch);
+    if(idx === -1) return null;
+    num = num * 58n + BigInt(idx);
+  }
+  // convertir a bytes
+  let hex = num.toString(16);
+  if(hex.length % 2) hex = '0' + hex;
+  let bytes = hex === '0' ? new Uint8Array() : Uint8Array.from(hex.match(/.{2}/g).map(b=>parseInt(b,16)));
+  // ceros iniciales representados como '1'
+  let leadingZeros = 0;
+  for(const ch of str){ if(ch === '1') leadingZeros++; else break; }
+  return new Uint8Array([...new Array(leadingZeros).fill(0), ...bytes]);
+}
+
+/* Bech32 (BIP-173) — validación de checksum para direcciones bc1... */
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+function bech32Polymod(values){
+  const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+  let chk = 1;
+  for(const v of values){
+    const b = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for(let i=0;i<5;i++){ if((b>>>i)&1) chk ^= GEN[i]; }
+  }
+  return chk >>> 0;
+}
+function bech32HrpExpand(hrp){
+  const ret = [];
+  for(const c of hrp) ret.push(c.charCodeAt(0) >> 5);
+  ret.push(0);
+  for(const c of hrp) ret.push(c.charCodeAt(0) & 31);
+  return ret;
+}
+function convertBits(data, fromBits, toBits, pad){
+  let acc = 0, bits = 0;
+  const ret = [], maxv = (1 << toBits) - 1, maxAcc = (1 << (fromBits + toBits - 1)) - 1;
+  for(const value of data){
+    if(value < 0 || (value >> fromBits) !== 0) return null;
+    acc = ((acc << fromBits) | value) & maxAcc;
+    bits += fromBits;
+    while(bits >= toBits){ bits -= toBits; ret.push((acc >> bits) & maxv); }
+  }
+  if(pad){ if(bits) ret.push((acc << (toBits - bits)) & maxv); }
+  else if(bits >= fromBits || ((acc << (toBits - bits)) & maxv)) return null;
+  return ret;
+}
+function bech32Verify(addr){
+  if(addr.length < 14 || addr.length > 90) return {valid:false, reason:'longitud bech32 fuera de rango'};
+  const lower = addr.toLowerCase();
+  if(addr !== lower && addr !== addr.toUpperCase()) return {valid:false, reason:'mezcla mayúsc/minúsc no permitida'};
+  const pos = lower.lastIndexOf('1');
+  if(pos < 1 || pos + 7 > lower.length) return {valid:false, reason:'formato inválido'};
+  const hrp = lower.slice(0,pos);
+  const dataPart = lower.slice(pos+1);
+  const data = [];
+  for(const c of dataPart){
+    const v = BECH32_CHARSET.indexOf(c);
+    if(v === -1) return {valid:false, reason:'carácter fuera de alfabeto bech32'};
+    data.push(v);
+  }
+  const polymod = bech32Polymod(bech32HrpExpand(hrp).concat(data));
+  const encoding = polymod === 1 ? 'bech32' : polymod === 0x2bc830a3 ? 'bech32m' : null;
+  if(!encoding) return {valid:false, hrp, reason:'checksum Bech32/Bech32m no coincide'};
+  const payload = data.slice(0,-6);
+  if(!payload.length) return {valid:false, hrp, reason:'falta la versión witness'};
+  const version = payload[0];
+  if(version > 16) return {valid:false, hrp, reason:'versión witness fuera de rango'};
+  const program = convertBits(payload.slice(1), 5, 8, false);
+  if(!program || program.length < 2 || program.length > 40) return {valid:false, hrp, reason:'longitud del witness program inválida'};
+  if(version === 0 && encoding !== 'bech32') return {valid:false, hrp, reason:'SegWit v0 debe usar Bech32'};
+  if(version !== 0 && encoding !== 'bech32m') return {valid:false, hrp, reason:'SegWit v1–v16 debe usar Bech32m'};
+  if(version === 0 && ![20,32].includes(program.length)) return {valid:false, hrp, reason:'SegWit v0 exige un programa de 20 o 32 bytes'};
+  return {valid:true, hrp, encoding, version, programLength:program.length};
+}
+
+async function analyzeBtcAddress(addr){
+  addr = addr.trim();
+  if(/^bc1[a-z0-9]{6,80}$/i.test(addr) || /^(tb1|bcrt1)[a-z0-9]{6,80}$/i.test(addr)){
+    const r = bech32Verify(addr);
+    const network = r.hrp === 'bc' ? 'Bitcoin mainnet' : r.hrp === 'tb' ? 'Bitcoin testnet' : r.hrp === 'bcrt' ? 'Bitcoin regtest' : 'Red desconocida';
+    let tipo = 'SegWit';
+    if(r.valid && r.version === 0 && r.programLength === 20) tipo = 'P2WPKH — SegWit v0';
+    else if(r.valid && r.version === 0 && r.programLength === 32) tipo = 'P2WSH — SegWit v0';
+    else if(r.valid && r.version === 1 && r.programLength === 32) tipo = 'P2TR — Taproot / SegWit v1';
+    else if(r.valid) tipo = `SegWit v${r.version}`;
+    return { tipo, red:network, formato:r.encoding === 'bech32m' ? 'Bech32m' : 'Bech32', witness:r.version, bytes:r.programLength, valido:r.valid, detalle:r.valid ? `checksum ${r.encoding} correcto` : r.reason };
+  }
+  if(/^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr)){
+    const decoded = base58decode(addr);
+    if(!decoded || decoded.length < 5) return { tipo:'Base58 (Legacy/P2SH)', valido:false, detalle:'no se pudo decodificar' };
+    const payload = decoded.slice(0, decoded.length-4);
+    const checksum = decoded.slice(decoded.length-4);
+    const hash = await sha256d(payload);
+    const ok = [0,1,2,3].every(i=>hash[i]===checksum[i]);
+    const tipo = addr[0]==='1' ? 'Base58 Legacy (P2PKH)' : 'Base58 P2SH';
+    const version = payload[0];
+    const expected = addr[0] === '1' ? 0x00 : 0x05;
+    const versionOk = version === expected && payload.length === 21;
+    return { tipo, red:'Bitcoin mainnet', formato:'Base58Check', valido: ok && versionOk, detalle: !ok ? 'checksum no coincide — dirección inválida o mal transcrita' : !versionOk ? 'versión o longitud de payload no válida para mainnet' : 'checksum SHA256d correcto' };
+  }
+  return { tipo:'desconocido', valido:false, detalle:'no coincide con ningún formato BTC reconocido (Legacy/P2SH/Bech32)' };
+}
+
+function analyzeEthAddress(addr){
+  addr = addr.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(addr)) return { valido:false, detalle:'formato inválido: se esperan 0x + 40 hex' };
+  const hasUpper = /[A-F]/.test(addr.slice(2));
+  const hasLower = /[a-f]/.test(addr.slice(2));
+  const mixedCase = hasUpper && hasLower;
+  return {
+    valido: true,
+    detalle: mixedCase
+      ? 'formato correcto. Tiene mayúsculas/minúsculas mezcladas (posible checksum EIP-55, no verificado aquí — requiere Keccak-256, omitido para mantener la herramienta sin dependencias pesadas)'
+      : 'formato correcto (todo minúsculas/mayúsculas — sin checksum de mayúsculas que verificar)'
+  };
+}
+
+async function checkCrypto(){
+  const input = document.getElementById('cryptoInput').value.trim();
+  const box = document.getElementById('cryptoResult');
+  if(!input){ box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML = '<div class="note" style="border:none;padding:0;">analizando…</div>';
+
+  let html = '';
+  if(input.startsWith('0x')){
+    const r = analyzeEthAddress(input);
+    html = `<div class="kv">
+      <div class="k">Red</div><div class="v">Ethereum (ETH / EVM)</div>
+      <div class="k">Formato</div><div class="v">${r.valido ? '<span class="badge ok">válido</span>' : '<span class="badge bad">inválido</span>'}</div>
+      <div class="k">Detalle</div><div class="v" style="font-family:var(--sans);">${r.detalle}</div>
+    </div>`;
+  } else {
+    const r = await analyzeBtcAddress(input);
+    html = `<div class="kv">
+      <div class="k">Red</div><div class="v">${escapeHtml(r.red || 'Bitcoin')}</div>
+      <div class="k">Tipo</div><div class="v">${r.tipo}</div>
+      <div class="k">Codificación</div><div class="v">${escapeHtml(r.formato || '—')}</div>
+      ${Number.isInteger(r.witness) ? `<div class="k">Witness</div><div class="v">v${r.witness} · ${r.bytes} bytes</div>` : ''}
+      <div class="k">Checksum</div><div class="v">${r.valido ? '<span class="badge ok">correcto</span>' : '<span class="badge bad">no válido</span>'}</div>
+      <div class="k">Detalle</div><div class="v" style="font-family:var(--sans);">${r.detalle}</div>
+    </div>`;
+  }
+  const known = exchangeDirectory.find(e=>e.addr.toLowerCase()===input.toLowerCase());
+  if(known){
+    html += `<div class="note" style="border-color:var(--amber-dim);margin-top:14px;">Coincide con tu directorio local: <b>${escapeHtml(known.label)}</b></div>`;
+  }
+  if((input.startsWith('0x') ? analyzeEthAddress(input).valido : (await analyzeBtcAddress(input)).valido)){
+    const btc = !input.startsWith('0x');
+    const links = btc
+      ? [['mempool.space',`https://mempool.space/address/${encodeURIComponent(input)}`],['Blockchair',`https://blockchair.com/bitcoin/address/${encodeURIComponent(input)}`],['Blockchain.com',`https://www.blockchain.com/explorer/addresses/btc/${encodeURIComponent(input)}`]]
+      : [['Etherscan',`https://etherscan.io/address/${encodeURIComponent(input)}`],['Blockchair',`https://blockchair.com/ethereum/address/${encodeURIComponent(input)}`]];
+    html += `<div class="hr"></div><div class="row">${links.map(([n,u])=>`<a class="btn ghost small" href="${u}" target="_blank" rel="noopener noreferrer">Abrir en ${n}</a>`).join('')}</div><div class="note">Los enlaces abren consultas externas solo al pulsarlos. La validación anterior es local.</div>`;
+  }
+  box.innerHTML = html;
+}
+
+/* directorio local de direcciones conocidas */
+let exchangeDirectory = [];
+async function addExchangeAddr(){
+  const addr = document.getElementById('exAddr').value.trim();
+  const label = document.getElementById('exLabel').value.trim();
+  if(!addr || !label) return;
+  const valid = addr.startsWith('0x') ? analyzeEthAddress(addr).valido : (await analyzeBtcAddress(addr)).valido;
+  if(!valid){ alert('La dirección no supera la validación local. Revisa el formato o checksum.'); return; }
+  if(exchangeDirectory.some(e=>e.addr.toLowerCase()===addr.toLowerCase())){ alert('La dirección ya está en el directorio.'); return; }
+  exchangeDirectory.push({addr, label});
+  document.getElementById('exAddr').value = '';
+  document.getElementById('exLabel').value = '';
+  renderExchangeList();
+}
+function removeExchangeAddr(i){ exchangeDirectory.splice(i,1); renderExchangeList(); }
+function renderExchangeList(){
+  const el = document.getElementById('exchangeList');
+  if(exchangeDirectory.length === 0){ el.innerHTML = '<div class="exrow" style="color:var(--text-faint);">vacío</div>'; return; }
+  el.innerHTML = exchangeDirectory.map((e,i)=>`<div class="exrow"><span>${escapeHtml(e.label)} <span class="tag">${escapeHtml(e.addr.slice(0,10))}…</span></span><button onclick="removeExchangeAddr(${i})">✕</button></div>`).join('');
+}
+renderExchangeList();
+
+/* ======================= GRAFO CRIPTO (traza importada) ======================= */
+function buildCryptoGraph(){
+  const raw = document.getElementById('cryptoTraceInput').value.trim();
+  if(!raw){ return; }
+  let rows = [];
+  try{
+    if(raw.startsWith('[') || raw.startsWith('{')){
+      const parsed = JSON.parse(raw);
+      rows = Array.isArray(parsed) ? parsed : (parsed.transactions || parsed.result || parsed.data || []);
+    } else {
+      const parsed = Papa.parse(raw, {header:true, skipEmptyLines:true});
+      rows = parsed.data;
+    }
+  }catch(e){
+    document.getElementById('cryptoGraphStats').innerHTML = `<div class="note" style="border-color:var(--red);">No se pudo interpretar el contenido como CSV ni JSON: ${e.message}</div>`;
+    return;
+  }
+  if(!rows.length){
+    document.getElementById('cryptoGraphStats').innerHTML = `<div class="note" style="border-color:var(--red);">Sin filas reconocibles.</div>`;
+    return;
+  }
+  const keys = Object.keys(rows[0]).map(k=>k.toLowerCase());
+  const pick = (...cands) => {
+    for(const c of cands){ const k = Object.keys(rows[0]).find(kk=>kk.toLowerCase().includes(c)); if(k) return k; }
+    return null;
+  };
+  const fromK = pick('from','origen','sender','ordenante');
+  const toK = pick('to','destino','receiver','beneficiario');
+  const valK = pick('value','amount','importe','cantidad','valuein','quantity');
+  const hashK = pick('hash','txid','tx hash','transaction');
+
+  if(!fromK || !toK){
+    document.getElementById('cryptoGraphStats').innerHTML = `<div class="note" style="border-color:var(--red);">No se detectaron columnas from/to. Columnas encontradas: ${Object.keys(rows[0]).join(', ')}</div>`;
+    return;
+  }
+
+  const links = [];
+  let totalValue = 0;
+  rows.forEach(r=>{
+    const from = (r[fromK]||'').toString().trim();
+    const to = (r[toK]||'').toString().trim();
+    if(!from || !to) return;
+    let val = valK ? Math.abs(parseMoney(r[valK])) : 1;
+    totalValue += val;
+    links.push({source: from, target: to, value: val, hash: hashK ? r[hashK] : ''});
+  });
+
+  const nodesMap = new Map();
+  links.forEach(l=>{
+    [l.source, l.target].forEach(id=>{
+      if(!nodesMap.has(id)) nodesMap.set(id, {id, flow:0});
+    });
+    nodesMap.get(l.source).flow += l.value;
+    nodesMap.get(l.target).flow += l.value;
+  });
+  const nodes = Array.from(nodesMap.values()).map(n=>{
+    const known = exchangeDirectory.find(e=>e.addr.toLowerCase()===n.id.toLowerCase());
+    return {...n, label: known ? known.label : (n.id.length>14 ? n.id.slice(0,6)+'…'+n.id.slice(-4) : n.id), known: !!known};
+  });
+
+  document.getElementById('cryptoGraphStats').innerHTML = `
+    <div class="stat"><div class="n">${nodes.length}</div><div class="l">direcciones</div></div>
+    <div class="stat"><div class="n">${links.length}</div><div class="l">transacciones</div></div>
+    <div class="stat"><div class="n">${nodes.filter(n=>n.known).length}</div><div class="l">identificadas</div></div>
+  `;
+  renderForceGraph('cryptoGraphWrap', nodes, links, {colorBy: n=>n.known?'#c9922f':'#4a8f8c', linkColor: ()=>'#4a8f8c', directed:true});
+}
+
+/* ======================= IBAN / CCC ======================= */
+let bankCodes = {
+  '0049':'Banco Santander, S.A.', '0075':'Banco Popular (integrado en Santander)', '0081':'Banco de Sabadell, S.A.',
+  '0128':'Bankinter, S.A.', '0182':'BBVA, S.A.', '0198':'Banco de la Exportación (histórico)',
+  '2038':'Bankia (integrado en CaixaBank)', '2085':'Ibercaja Banco, S.A.', '2100':'CaixaBank, S.A.',
+  '2103':'Unicaja Banco, S.A.', '3058':'Cajamar Caja Rural', '3159':'Caja Rural de Navarra',
+  '1465':'ING Bank N.V., Sucursal en España', '1491':'Deutsche Bank, S.A.E.', '0073':'Openbank, S.A.',
+  '1550':'Bankoa / Crédit Agricole', '0061':'Banca March, S.A.', '0186':'Banco Mediolanum, S.A.',
+  '0239':'Evo Banco, S.A.', '1487':'Triodos Bank', '0487':'Banco de Servicios Financieros Caja Rural',
+  '0125':'Banco de Crédito Social Cooperativo (Cajas Rurales)', '3025':'Caja Rural Central',
+  '3187':'Caja Rural de Zaragoza', '3183':'Caja Rural de Gijón'
+};
+function renderBankTable(){
+  const tb = document.querySelector('#bankTable tbody');
+  const entries = Object.entries(bankCodes).sort((a,b)=>a[0].localeCompare(b[0]));
+  tb.innerHTML = entries.map(([code,name])=>`<tr><td>${code}</td><td style="font-family:var(--sans);white-space:normal;">${escapeHtml(name)}</td><td><button class="btn ghost small" onclick="deleteBankCode('${code}')">✕</button></td></tr>`).join('');
+}
+function addBankCode(){
+  const code = document.getElementById('newBankCode').value.trim();
+  const name = document.getElementById('newBankName').value.trim();
+  if(!/^\d{4}$/.test(code) || !name) return;
+  bankCodes[code] = name;
+  document.getElementById('newBankCode').value='';
+  document.getElementById('newBankName').value='';
+  renderBankTable();
+}
+function deleteBankCode(code){ delete bankCodes[code]; renderBankTable(); }
+renderBankTable();
+
+function ccControlDigit(digits, weights){
+  const sum = digits.split('').reduce((acc,d,i)=>acc + parseInt(d,10)*weights[i], 0);
+  let r = 11 - (sum % 11);
+  if(r === 11) r = 0;
+  if(r === 10) r = 1;
+  return r;
+}
+function ibanMod97Valid(iban){
+  const rearranged = iban.slice(4) + iban.slice(0,4);
+  const numeric = rearranged.split('').map(ch=>{
+    if(/[0-9]/.test(ch)) return ch;
+    return (ch.toUpperCase().charCodeAt(0) - 55).toString();
+  }).join('');
+  let remainder = 0;
+  for(let i=0;i<numeric.length;i+=7){
+    const chunk = String(remainder) + numeric.substr(i,7);
+    remainder = parseInt(chunk,10) % 97;
+  }
+  return remainder === 1;
+}
+
+function checkIban(){
+  const raw = document.getElementById('ibanInput').value.replace(/\s+/g,'').toUpperCase();
+  const box = document.getElementById('ibanResult');
+  box.style.display='block';
+  if(!raw){ box.innerHTML=''; box.style.display='none'; return; }
+
+  let html = '';
+  // CCC puro (20 dígitos, España, sin ES ni dc IBAN)
+  if(/^\d{20}$/.test(raw)){
+    const entidad = raw.slice(0,4), oficina = raw.slice(4,8), dc = raw.slice(8,10), cuenta = raw.slice(10,20);
+    const dc1 = ccControlDigit(entidad+oficina, [4,8,5,10,9,7,3,6]);
+    const dc2 = ccControlDigit(cuenta, [1,2,4,8,5,10,9,7,3,6]);
+    const ok = (String(dc1)===dc[0] && String(dc2)===dc[1]);
+    const bankName = bankCodes[entidad] || null;
+    // IBAN equivalente
+    const bban = entidad+oficina+dc+cuenta;
+    const check = ibanCheckDigitsFromBban('ES', bban);
+    html = `<div class="kv">
+      <div class="k">Formato detectado</div><div class="v">CCC español (20 dígitos)</div>
+      <div class="k">Entidad</div><div class="v">${entidad} ${bankName ? '— '+escapeHtml(bankName) : '<span class="badge warn">no está en tu tabla</span>'}</div>
+      <div class="k">Oficina</div><div class="v">${oficina}</div>
+      <div class="k">Dígitos control</div><div class="v">${dc} ${ok ? '<span class="badge ok">correctos</span>' : '<span class="badge bad">no coinciden (esperado '+dc1+dc2+')</span>'}</div>
+      <div class="k">Nº cuenta</div><div class="v">${cuenta}</div>
+      <div class="k">IBAN equivalente</div><div class="v">ES${check}${bban}</div>
+    </div>`;
+  }
+  // IBAN
+  else if(/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(raw)){
+    const country = raw.slice(0,2);
+    const valid = ibanMod97Valid(raw);
+    html = `<div class="kv">
+      <div class="k">Formato</div><div class="v">IBAN — país ${country}</div>
+      <div class="k">Checksum (mod 97)</div><div class="v">${valid ? '<span class="badge ok">válido</span>' : '<span class="badge bad">inválido</span>'}</div>
+      <div class="k">Longitud</div><div class="v">${raw.length} caracteres</div>
+    </div>`;
+    if(country === 'ES' && raw.length === 24){
+      const bban = raw.slice(4);
+      const entidad = bban.slice(0,4), oficina = bban.slice(4,8), dc = bban.slice(8,10), cuenta = bban.slice(10,20);
+      const bankName = bankCodes[entidad] || null;
+      const dc1 = ccControlDigit(entidad+oficina, [4,8,5,10,9,7,3,6]);
+      const dc2 = ccControlDigit(cuenta, [1,2,4,8,5,10,9,7,3,6]);
+      const dcOk = (String(dc1)===dc[0] && String(dc2)===dc[1]);
+      html += `<div class="hr"></div><div class="kv">
+        <div class="k">Entidad</div><div class="v">${entidad} ${bankName ? '— '+escapeHtml(bankName) : '<span class="badge warn">no está en tu tabla</span>'}</div>
+        <div class="k">Oficina</div><div class="v">${oficina}</div>
+        <div class="k">DC internos CCC</div><div class="v">${dc} ${dcOk ? '<span class="badge ok">correctos</span>' : '<span class="badge bad">no coinciden</span>'}</div>
+        <div class="k">Nº cuenta</div><div class="v">${cuenta}</div>
+      </div>`;
+    } else if(country !== 'ES'){
+      html += `<div class="note">Identificación de entidad detallada solo implementada para España en esta versión. Para otros países, el código de entidad ocupa posiciones distintas según el esquema BBAN de cada país.</div>`;
+    }
+  }
+  else {
+    html = `<div class="badge bad">Formato no reconocido</div><div class="note">Se esperaba un IBAN (2 letras país + 2 dígitos + BBAN) o un CCC español de 20 dígitos.</div>`;
+  }
+  box.innerHTML = html;
+}
+function ibanCheckDigitsFromBban(country, bban){
+  const provisional = bban + country + '00';
+  const numeric = provisional.split('').map(ch=>/[0-9]/.test(ch) ? ch : (ch.toUpperCase().charCodeAt(0)-55).toString()).join('');
+  let remainder = 0;
+  for(let i=0;i<numeric.length;i+=7){
+    const chunk = String(remainder) + numeric.substr(i,7);
+    remainder = parseInt(chunk,10) % 97;
+  }
+  const check = 98 - remainder;
+  return String(check).padStart(2,'0');
+}
+
+/* ======================= BIN / TARJETAS ======================= */
+function luhnValid(numStr){
+  const digits = numStr.replace(/\D/g,'');
+  let sum = 0, alt = false;
+  for(let i=digits.length-1;i>=0;i--){
+    let d = parseInt(digits[i],10);
+    if(alt){ d*=2; if(d>9) d-=9; }
+    sum += d; alt = !alt;
+  }
+  return { valid: sum % 10 === 0, digits };
+}
+function detectNetwork(digits){
+  if(/^4/.test(digits)) return 'Visa';
+  if(/^(5[1-5]|2[2-7][0-2][0-9])/.test(digits)) return 'Mastercard';
+  if(/^3[47]/.test(digits)) return 'American Express';
+  if(/^(6011|65|64[4-9]|622(1[2-9][6-9]|[2-8][0-9]{2}|9[01][0-9]|92[0-5]))/.test(digits)) return 'Discover';
+  if(/^3(0[0-5]|[68])/.test(digits)) return 'Diners Club';
+  if(/^35(2[89]|[3-8][0-9])/.test(digits)) return 'JCB';
+  if(/^62/.test(digits)) return 'UnionPay';
+  if(/^(5[0678]|6304|6390|67)/.test(digits)) return 'Maestro';
+  return null;
+}
+let binTable = [];
+function loadBinCsv(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  Papa.parse(file, {header:true, skipEmptyLines:true, complete: res=>{
+    binTable = res.data.map(r=>{
+      const keys = Object.keys(r);
+      const binK = keys.find(k=>k.toLowerCase().includes('bin'));
+      const entK = keys.find(k=>k.toLowerCase().includes('ent') || k.toLowerCase().includes('issuer') || k.toLowerCase().includes('bank'));
+      const paisK = keys.find(k=>k.toLowerCase().includes('pais') || k.toLowerCase().includes('country'));
+      const tipoK = keys.find(k=>k.toLowerCase().includes('tipo') || k.toLowerCase().includes('type'));
+      return { bin: binK ? (r[binK]||'').toString().trim() : '', entidad: entK ? r[entK] : '', pais: paisK ? r[paisK] : '', tipo: tipoK ? r[tipoK] : '' };
+    }).filter(r=>r.bin);
+    document.getElementById('binCsvStatus').innerHTML = `<span class="badge ok">cargado</span> ${binTable.length} rangos disponibles para búsqueda local.`;
+  }});
+}
+function checkCard(){
+  const raw = document.getElementById('cardInput').value.replace(/\s+/g,'');
+  const box = document.getElementById('cardResult');
+  if(!raw){ box.style.display='none'; return; }
+  box.style.display='block';
+  const digitsOnly = raw.replace(/\D/g,'');
+  if(!digitsOnly){ box.innerHTML = '<div class="badge bad">Introduce solo dígitos</div>'; return; }
+  const network = detectNetwork(digitsOnly);
+  let html = `<div class="kv">
+    <div class="k">Red detectada</div><div class="v">${network || '<span class="badge warn">no reconocida por rango IIN</span>'}</div>
+    <div class="k">Longitud</div><div class="v">${digitsOnly.length} dígitos</div>`;
+  if(digitsOnly.length >= 12){
+    const l = luhnValid(digitsOnly);
+    html += `<div class="k">Luhn</div><div class="v">${l.valid ? '<span class="badge ok">válido</span>' : '<span class="badge bad">no válido</span>'}</div>`;
+  } else {
+    html += `<div class="k">Luhn</div><div class="v"><span class="badge warn">solo BIN — se necesitan ≥12 dígitos para Luhn</span></div>`;
+  }
+  html += `</div>`;
+  if(binTable.length){
+    const match = binTable.find(r=> digitsOnly.startsWith(r.bin));
+    if(match){
+      html += `<div class="hr"></div><div class="kv">
+        <div class="k">Emisor (tu tabla)</div><div class="v">${escapeHtml(match.entidad||'—')}</div>
+        <div class="k">País</div><div class="v">${escapeHtml(match.pais||'—')}</div>
+        <div class="k">Tipo</div><div class="v">${escapeHtml(match.tipo||'—')}</div>
+      </div>`;
+    } else {
+      html += `<div class="note">Sin coincidencia en tu tabla BIN cargada.</div>`;
+    }
+  } else {
+    html += `<div class="note">No has cargado ninguna tabla BIN local — solo se muestra la red por rango IIN público.</div>`;
+  }
+  box.innerHTML = html;
+}
+
+/* ======================= NORMA 43 (AEB) — mejor esfuerzo ======================= */
+function parseNorma43(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.length>0);
+  const txs = [];
+  let currentAccount = null;
+  const fmtDate = s => { if(!/^\d{6}$/.test(s)) return ''; return `20${s.slice(0,2)}-${s.slice(2,4)}-${s.slice(4,6)}`; };
+  lines.forEach(line=>{
+    const type = line.slice(0,2);
+    if(type === '11'){
+      currentAccount = {
+        entidad: line.slice(2,6), oficina: line.slice(6,10), cuenta: line.slice(10,20),
+        fechaInicio: fmtDate(line.slice(20,26)), fechaFin: fmtDate(line.slice(26,32))
+      };
+    } else if(type === '22'){
+      const claveChar = line.slice(28,29);
+      const esDebe = ['1','2','3','4'].includes(claveChar) && !['5','6'].includes(claveChar); // aproximado
+      const importeRaw = line.slice(29,44).replace(/\D/g,'');
+      let importe = importeRaw ? parseInt(importeRaw,10)/100 : 0;
+      // heurística de signo: claves impares/1x = adeudo, pares/2x = abono (varía por banco, revisar)
+      const debito = /^(1|01|21|24)/.test(claveChar);
+      importe = debito ? -Math.abs(importe) : Math.abs(importe);
+      txs.push({
+        fecha: fmtDate(line.slice(12,18)),
+        fechaValor: fmtDate(line.slice(18,24)),
+        cuenta: currentAccount ? `${currentAccount.entidad}-${currentAccount.oficina}-${currentAccount.cuenta}` : (line.slice(2,10)),
+        concepto: `com:${line.slice(24,26)} prop:${line.slice(26,28)}`,
+        contraparte: '',
+        importe: importe,
+        saldo: '',
+        referencia: line.slice(44,60).trim(),
+        origen: 'Norma43'
+      });
+    } else if(type === '23' || type === '24'){
+      if(txs.length){
+        const extra = line.slice(4).trim();
+        txs[txs.length-1].contraparte = (txs[txs.length-1].contraparte + ' ' + extra).trim();
+      }
+    }
+    // 33 (cierre) y 88 (fin fichero) se ignoran para la lista de movimientos
+  });
+  return txs;
+}
+
+/* ======================= CARGA Y NORMALIZACIÓN DE EXTRACTOS ======================= */
+let rawParsedRows = [];
+let rawHeaders = [];
+let sourceFormat = '';
+let normalizedTx = [];
+let currentFilterAccount = null;
+let selectedTxIds = new Set();
+let graphMode = 'all'; // 'all' | 'in' | 'out' | 'manual'
+
+function handleBankFile(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('bankFileStatus');
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if(ext === 'xlsx' || ext === 'xls'){
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      rawParsedRows = json;
+      rawHeaders = json.length ? Object.keys(json[0]) : [];
+      sourceFormat = 'XLSX';
+      statusEl.innerHTML = `<span class="badge ok">leído</span> ${json.length} filas, hoja "${wb.SheetNames[0]}"`;
+      showMappingPanel();
+    };
+    reader.readAsArrayBuffer(file);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const text = e.target.result;
+    // detección Norma43: líneas de 80 chars empezando por 11/22/23/24/33/88
+    const firstLines = text.split(/\r?\n/).slice(0,5).filter(l=>l.length>0);
+    const looksN43 = firstLines.length && firstLines.every(l => /^(11|22|23|24|33|88)/.test(l));
+    if(looksN43){
+      const txs = parseNorma43(text);
+      sourceFormat = 'Norma43';
+      normalizedTx = txs;
+      statusEl.innerHTML = `<span class="badge ok">Norma 43 detectada</span> ${txs.length} movimientos extraídos. Ver aviso en Inicio: anchos de campo por mejor esfuerzo, revisa antes de usar como prueba.`;
+      document.getElementById('mappingPanel').style.display='none';
+      finishNormalization();
+      return;
+    }
+    // si no, tratar como CSV / TSV / texto delimitado
+    const parsed = Papa.parse(text, {header:true, skipEmptyLines:true, dynamicTyping:false});
+    rawParsedRows = parsed.data;
+    rawHeaders = parsed.meta.fields || (rawParsedRows.length ? Object.keys(rawParsedRows[0]) : []);
+    sourceFormat = ext === 'txt' ? 'TXT (delimitado)' : 'CSV';
+    statusEl.innerHTML = `<span class="badge ok">leído</span> ${rawParsedRows.length} filas como ${sourceFormat}`;
+    showMappingPanel();
+  };
+  reader.readAsText(file);
+}
+
+const FIELD_TARGETS = ['fecha','cuenta','contraparte','concepto','importe','debe','haber','saldo','referencia','ignorar'];
+function guessField(header){
+  const h = header.toLowerCase();
+  if(/fecha|date/.test(h)) return 'fecha';
+  if(/iban|cuenta|account/.test(h)) return 'cuenta';
+  if(/beneficiari|ordenante|contrapart|titular|tercero|nombre|counterpart/.test(h)) return 'contraparte';
+  if(/concepto|descrip|detalle|concept/.test(h)) return 'concepto';
+  if(/^debe$|cargo|débito|debit/.test(h)) return 'debe';
+  if(/^haber$|abono|crédito|credit/.test(h)) return 'haber';
+  if(/importe|cantidad|amount|monto/.test(h)) return 'importe';
+  if(/saldo|balance/.test(h)) return 'saldo';
+  if(/referenc|ref\.?$/.test(h)) return 'referencia';
+  return 'ignorar';
+}
+function showMappingPanel(){
+  const panel = document.getElementById('mappingPanel');
+  panel.style.display = 'block';
+  const rows = document.getElementById('mappingRows');
+  rows.innerHTML = rawHeaders.map(h=>{
+    const guess = guessField(h);
+    const options = FIELD_TARGETS.map(f=>`<option value="${f}" ${f===guess?'selected':''}>${f}</option>`).join('');
+    return `<div class="mapping-row"><div>${escapeHtml(h)}</div><div><select data-header="${escapeHtml(h)}">${options}</select></div></div>`;
+  }).join('');
+}
+
+function normalizeTransactions(){
+  const selects = document.querySelectorAll('#mappingRows select');
+  const map = {};
+  selects.forEach(s=>{ map[s.dataset.header] = s.value; });
+
+  const findCol = target => Object.keys(map).find(h=>map[h]===target);
+  const fechaCol = findCol('fecha'), cuentaCol = findCol('cuenta'), contraCol = findCol('contraparte'),
+        conceptoCol = findCol('concepto'), importeCol = findCol('importe'), debeCol = findCol('debe'),
+        haberCol = findCol('haber'), saldoCol = findCol('saldo'), refCol = findCol('referencia');
+
+  const ibanRegex = /[A-Z]{2}\d{2}[A-Z0-9]{10,30}/;
+  normalizedTx = rawParsedRows.map(r=>{
+    let importe = 0;
+    if(importeCol){ importe = parseMoney(r[importeCol]); }
+    else if(debeCol || haberCol){
+      const d = parseMoney(r[debeCol]);
+      const h = parseMoney(r[haberCol]);
+      importe = h - Math.abs(d);
+    }
+    let contraparte = contraCol ? (r[contraCol]||'').toString().trim() : '';
+    const concepto = conceptoCol ? (r[conceptoCol]||'').toString().trim() : '';
+    if(!contraparte){
+      const m = concepto.match(ibanRegex);
+      if(m) contraparte = m[0];
+    }
+    return {
+      fecha: fechaCol ? (r[fechaCol]||'').toString().trim() : '',
+      cuenta: cuentaCol ? (r[cuentaCol]||'').toString().trim() : '(sin identificar)',
+      contraparte: contraparte || '(sin identificar)',
+      concepto,
+      importe,
+      saldo: saldoCol ? (r[saldoCol]||'').toString().trim() : '',
+      referencia: refCol ? (r[refCol]||'').toString().trim() : '',
+      origen: sourceFormat
+    };
+  });
+  finishNormalization();
+}
+
+function finishNormalization(){
+  document.getElementById('statsPanel').style.display='block';
+  document.getElementById('summaryPanel').style.display='block';
+  document.getElementById('graphPanel').style.display='block';
+  document.getElementById('rankingPanel').style.display='block';
+  document.getElementById('tablePanel').style.display='block';
+  currentFilterAccount = null;
+
+  // id estable por movimiento + selección de grafo reiniciada a "todos marcados"
+  normalizedTx.forEach((t,i)=>{ t._id = i; });
+  selectedTxIds = new Set(normalizedTx.map(t=>t._id));
+  graphMode = 'all';
+  const modeSel = document.getElementById('graphModeSelect');
+  if(modeSel) modeSel.value = 'all';
+  document.getElementById('graphModeHint').style.display = 'none';
+
+  const total = normalizedTx.length;
+  const totalIn = normalizedTx.filter(t=>t.importe>0).reduce((a,t)=>a+t.importe,0);
+  const totalOut = normalizedTx.filter(t=>t.importe<0).reduce((a,t)=>a+t.importe,0);
+  const accounts = new Set(normalizedTx.map(t=>t.cuenta));
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat"><div class="n">${total}</div><div class="l">movimientos</div></div>
+    <div class="stat"><div class="n" style="color:#8fbf8f;">${totalIn.toFixed(2)}</div><div class="l">total entradas</div></div>
+    <div class="stat"><div class="n" style="color:#e08a7a;">${totalOut.toFixed(2)}</div><div class="l">total salidas</div></div>
+    <div class="stat"><div class="n">${accounts.size}</div><div class="l">cuentas propias detectadas</div></div>
+  `;
+
+  renderSummary();
+  buildTxGraph();
+  renderRanking();
+  renderTxTable();
+}
+
+/* ======================= RESUMEN EN LENGUAJE NATURAL ======================= */
+function parseFechaLoose(s){
+  if(!s) return null;
+  s = s.toString().trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){ let y = +m[3]; if(y<100) y+=2000; return new Date(y, +m[2]-1, +m[1]); }
+  return null;
+}
+function fmtEUR(n){ return n.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function renderSummary(){
+  const tx = normalizedTx;
+  const box = document.getElementById('summaryText');
+  const flagsBox = document.getElementById('summaryFlags');
+  if(!tx.length){ box.innerHTML=''; flagsBox.innerHTML=''; return; }
+
+  const dated = tx.map(t=>({...t, _d: parseFechaLoose(t.fecha)})).filter(t=>t._d);
+  dated.sort((a,b)=>a._d-b._d);
+  const first = dated[0], last = dated[dated.length-1];
+  const days = (first && last) ? Math.max(1, Math.round((last._d-first._d)/86400000)+1) : null;
+
+  const ins = tx.filter(t=>t.importe>0);
+  const outs = tx.filter(t=>t.importe<0);
+  const totalIn = ins.reduce((a,t)=>a+t.importe,0);
+  const totalOut = outs.reduce((a,t)=>a+Math.abs(t.importe),0);
+  const neto = totalIn - totalOut;
+  const avgIn = ins.length ? totalIn/ins.length : 0;
+  const avgOut = outs.length ? totalOut/outs.length : 0;
+  const accounts = [...new Set(tx.map(t=>t.cuenta))];
+
+  // ranking de contrapartes por volumen absoluto
+  const cp = {};
+  tx.forEach(t=>{
+    const k = t.contraparte || '(sin identificar)';
+    if(!cp[k]) cp[k] = {in:0,out:0,count:0};
+    if(t.importe>=0) cp[k].in += t.importe; else cp[k].out += Math.abs(t.importe);
+    cp[k].count++;
+  });
+  const cpArr = Object.entries(cp).map(([k,v])=>({name:k, total:v.in+v.out, ...v})).sort((a,b)=>b.total-a.total);
+  const topCp = cpArr.filter(c=>c.name!=='(sin identificar)')[0];
+
+  // saldo inicial/final si hay columna saldo con datos numéricos
+  const withSaldo = dated.filter(t=>t.saldo!=='' && Number.isFinite(parseMoney(t.saldo)));
+  let saldoLine = '';
+  if(withSaldo.length>=2){
+    const sIni = parseMoney(withSaldo[0].saldo);
+    const sFin = parseMoney(withSaldo[withSaldo.length-1].saldo);
+    saldoLine = ` El saldo pasa de <b>${fmtEUR(sIni)} €</b> a <b>${fmtEUR(sFin)} €</b> (${sFin>=sIni?'incremento':'reducción'} de ${fmtEUR(Math.abs(sFin-sIni))} €).`;
+  }
+
+  const mayorMov = tx.reduce((max,t)=> Math.abs(t.importe)>Math.abs(max.importe)?t:max, tx[0]);
+
+  let text = `Se han normalizado <b>${tx.length} movimientos</b> de ${accounts.length===1?'la cuenta':accounts.length+' cuentas'} analizada${accounts.length===1?'':'s'}`;
+  if(first && last) text += `, entre el <b>${first._d.toLocaleDateString('es-ES')}</b> y el <b>${last._d.toLocaleDateString('es-ES')}</b> (${days} días)`;
+  text += `.<br>Entradas: <b>${fmtEUR(totalIn)} €</b> en ${ins.length} movimientos (media ${fmtEUR(avgIn)} €). Salidas: <b>${fmtEUR(totalOut)} €</b> en ${outs.length} movimientos (media ${fmtEUR(avgOut)} €). Resultado neto del periodo: <b style="color:${neto>=0?'#8fbf8f':'#e08a7a'};">${neto>=0?'+':''}${fmtEUR(neto)} €</b>.${saldoLine}`;
+  if(topCp) text += `<br>La contraparte con mayor volumen es <b>${escapeHtml(topCp.name)}</b>, con ${fmtEUR(topCp.total)} € en ${topCp.count} movimientos (${fmtEUR(topCp.in)} € de entrada / ${fmtEUR(topCp.out)} € de salida).`;
+  if(mayorMov) text += ` El movimiento individual de mayor importe es de <b>${fmtEUR(Math.abs(mayorMov.importe))} €</b> (${mayorMov.importe>=0?'entrada':'salida'}, ${escapeHtml(mayorMov.fecha||'fecha no identificada')}, contraparte ${escapeHtml(mayorMov.contraparte)}).`;
+  box.innerHTML = text;
+
+  // señales a revisar (heurísticas, no conclusiones)
+  const flags = [];
+  const nearThreshold = tx.filter(t => Math.abs(t.importe) >= 2850 && Math.abs(t.importe) < 3000);
+  if(nearThreshold.length >= 2){
+    flags.push({level:'warn', text:`${nearThreshold.length} movimientos justo por debajo de 3.000 € — patrón que puede merecer revisión por posible fraccionamiento.`});
+  }
+  // repetición de importe similar con la misma contraparte en pocos días
+  const byCp = {};
+  dated.forEach(t=>{ const k=t.contraparte||''; if(!k||k==='(sin identificar)') return; (byCp[k] = byCp[k]||[]).push(t); });
+  let structuringGroups = 0;
+  Object.entries(byCp).forEach(([k,list])=>{
+    if(list.length<3) return;
+    list.sort((a,b)=>a._d-b._d);
+    for(let i=0;i<list.length-2;i++){
+      const window = list.slice(i,i+3);
+      const span = (window[2]._d-window[0]._d)/86400000;
+      const amounts = window.map(t=>Math.abs(t.importe));
+      const avg = amounts.reduce((a,b)=>a+b,0)/3;
+      const similar = amounts.every(a=>Math.abs(a-avg)/avg < 0.15);
+      if(span<=5 && similar && avg>200){ structuringGroups++; break; }
+    }
+  });
+  if(structuringGroups>0){
+    flags.push({level:'high', text:`${structuringGroups} contraparte(s) con al menos 3 movimientos de importe similar concentrados en ≤5 días — patrón compatible con fraccionamiento, revisar en detalle.`});
+  }
+  const unidentified = tx.filter(t=>t.contraparte==='(sin identificar)').length;
+  if(unidentified > tx.length*0.3 && tx.length>5){
+    flags.push({level:'warn', text:`${unidentified} de ${tx.length} movimientos (${Math.round(unidentified/tx.length*100)}%) no tienen contraparte identificada — revisa el mapeo de columnas si esperabas más detalle, o el concepto original en la tabla de abajo.`});
+  }
+  flagsBox.innerHTML = flags.map(f=>`<div class="flag ${f.level==='high'?'high':''}"><span class="flagicon">${f.level==='high'?'!!':'· '}</span><span>${f.text}</span></div>`).join('');
+}
+
+function renderRanking(){
+  const cp = {};
+  normalizedTx.forEach(t=>{
+    const k = t.contraparte || '(sin identificar)';
+    if(!cp[k]) cp[k] = {in:0,out:0,count:0, first:null, last:null};
+    if(t.importe>=0) cp[k].in += t.importe; else cp[k].out += Math.abs(t.importe);
+    cp[k].count++;
+    const d = parseFechaLoose(t.fecha);
+    if(d){ if(!cp[k].first||d<cp[k].first) cp[k].first=d; if(!cp[k].last||d>cp[k].last) cp[k].last=d; }
+  });
+  const rows = Object.entries(cp).map(([name,v])=>({name,...v,total:v.in+v.out})).sort((a,b)=>b.total-a.total).slice(0,25);
+  const tbody = document.querySelector('#rankingTable tbody');
+  tbody.innerHTML = rows.map((r,i)=>`<tr style="cursor:pointer;" data-idx="${i}">
+    <td style="white-space:normal;max-width:240px;">${escapeHtml(r.name)}</td>
+    <td class="pos">${fmtEUR(r.in)}</td>
+    <td class="neg">${fmtEUR(r.out)}</td>
+    <td class="${r.in-r.out>=0?'pos':'neg'}">${fmtEUR(r.in-r.out)}</td>
+    <td>${r.count}</td>
+    <td>${r.first?r.first.toLocaleDateString('es-ES'):'—'}</td>
+    <td>${r.last?r.last.toLocaleDateString('es-ES'):'—'}</td>
+  </tr>`).join('');
+  tbody.querySelectorAll('tr').forEach((tr,i)=>{
+    tr.addEventListener('click', ()=>{ currentFilterAccount = rows[i].name; renderTxTable(); });
+  });
+}
+
+function onGraphModeChange(){
+  graphMode = document.getElementById('graphModeSelect').value;
+  document.getElementById('graphModeHint').style.display = graphMode==='manual' ? 'block' : 'none';
+  buildTxGraph();
+}
+
+function txForGraph(){
+  if(graphMode === 'in') return normalizedTx.filter(t=>t.importe>0);
+  if(graphMode === 'out') return normalizedTx.filter(t=>t.importe<0);
+  if(graphMode === 'manual') return normalizedTx.filter(t=>selectedTxIds.has(t._id));
+  return normalizedTx;
+}
+
+function shortAccountLabel(id, keep=6){
+  if(!id) return id;
+  if(/^\(/.test(id)) return id;              // etiquetas tipo "(sin identificar)"
+  if(/\s/.test(id)) return id;               // nombres o textos con espacios: se muestran completos
+  if(!/^[A-Za-z0-9]+$/.test(id)) return id;  // si no es alfanumérico "limpio" no lo tratamos como nº de cuenta
+  if(id.length <= keep+2) return id;
+  return '…' + id.slice(-keep);
+}
+
+function buildTxGraph(){
+  const minFilter = parseFloat(document.getElementById('graphMinFilter')?.value || '0');
+  const aggregate = document.getElementById('graphAggregate')?.checked || false;
+  const investigatedRaw = document.getElementById('investigatedAccountInput')?.value || '';
+  const investigatedList = investigatedRaw.split(/[,;\n]+/).map(s=>s.replace(/\s+/g,'').toUpperCase()).filter(Boolean);
+  if(!investigatedList.length){
+    const container = document.getElementById('graphwrap');
+    if(container) container.innerHTML = '<div class="note" style="padding:28px;border:0;">Introduce arriba el número de la cuenta investigada para construir el grafo.</div>';
+    const detail = document.getElementById('nodeDetail');
+    if(detail) detail.innerHTML = '';
+    return;
+  }
+  const investigatedSet = new Set(investigatedList);
+  const CENTER_ID = '__INVESTIGADA__';
+  const centerLabel = investigatedList.length === 1 ? shortAccountLabel(investigatedList[0], 8) : `${investigatedList.length} cuentas propias`;
+
+  const source = txForGraph();
+  const nodesMap = new Map();
+  const ensureNode = (id, isOwn) => {
+    if(!nodesMap.has(id)) nodesMap.set(id, {id, label: isOwn ? centerLabel : shortAccountLabel(id), fullLabel: isOwn ? investigatedList.join(', ') : id, flow:0, in:0, out:0, own:isOwn});
+    return nodesMap.get(id);
+  };
+  const own = ensureNode(CENTER_ID, true);
+
+  // construir un edge por transacción incluida (o agregarlos si el usuario lo pide)
+  const rawLinks = [];
+  const aggMap = new Map();
+  source.forEach(t=>{
+    if(Math.abs(t.importe) < minFilter) return;
+    let counterparty = (t.contraparte || '').trim();
+    const rowAccount = (t.cuenta || '').replace(/\s+/g,'').toUpperCase();
+    const counterpartyIsInvestigated = counterparty && investigatedSet.has(counterparty.replace(/\s+/g,'').toUpperCase());
+    if((!counterparty || counterparty === '(sin identificar)' || counterpartyIsInvestigated) && rowAccount && !investigatedSet.has(rowAccount) && rowAccount !== '(SINIDENTIFICAR)') counterparty = t.cuenta;
+    if(!counterparty || investigatedSet.has(counterparty.replace(/\s+/g,'').toUpperCase())) counterparty = '(contraparte sin identificar)';
+    const other = ensureNode(counterparty, false);
+    own.flow += Math.abs(t.importe);
+    other.flow += Math.abs(t.importe);
+    const isCredit = t.importe >= 0;
+    if(isCredit){ own.in += t.importe; other.out += t.importe; } else { own.out += Math.abs(t.importe); other.in += Math.abs(t.importe); }
+    const src = isCredit ? other.id : CENTER_ID;
+    const tgt = isCredit ? CENTER_ID : other.id;
+    if(aggregate){
+      const key = src+'|'+tgt;
+      if(!aggMap.has(key)) aggMap.set(key, {source:src, target:tgt, value:0, count:0, credit:isCredit, txs:[]});
+      const l = aggMap.get(key);
+      l.value += Math.abs(t.importe); l.count += 1; l.txs.push(t);
+    } else {
+      rawLinks.push({source:src, target:tgt, value:Math.abs(t.importe), count:1, credit:isCredit, fecha:t.fecha, concepto:t.concepto, referencia:t.referencia, txId:t._id});
+    }
+  });
+
+  const nodes = Array.from(nodesMap.values());
+  const links = aggregate ? Array.from(aggMap.values()) : rawLinks;
+  const represented = links.reduce((a,l)=>a+l.count,0);
+  const totalForAccount = normalizedTx.length;
+  const modeLabel = {all:'todos los movimientos', in:'solo entradas', out:'solo salidas', manual:'selección manual'}[graphMode];
+  renderForceGraph('graphwrap', nodes, links, {
+    colorBy: n => n.own ? '#c9922f' : '#4a8f8c',
+    linkColor: l => l.credit ? '#5c8a5c' : '#b8503f',
+    directed: true,
+    linkLabels: aggregate,
+    bankLayout: true,
+    onNodeClick: (nodeId, n) => {
+      currentFilterAccount = n.own ? null : nodeId;
+      renderTxTable();
+      document.getElementById('nodeDetail').innerHTML = `<div class="panel-mini"><div class="kv">
+        <div class="k">Nodo</div><div class="v">${escapeHtml(n.fullLabel||n.label)}${n.own?' <span class="badge ok">cuenta investigada</span>':''}</div>
+        <div class="k">Total entradas</div><div class="v pos">${fmtEUR(n.in)} €</div>
+        <div class="k">Total salidas</div><div class="v neg">${fmtEUR(Math.abs(n.out))} €</div>
+        <div class="k">Volumen total</div><div class="v">${fmtEUR(n.flow)} €</div>
+      </div></div>`;
+    }
+  });
+  const omittedByAmount = source.length - represented;
+  const omittedByMode = totalForAccount - source.length;
+  document.getElementById('nodeDetail').innerHTML = `<div class="note" style="margin-top:10px;">Cuenta investigada: <b>${escapeHtml(investigatedList.join(', '))}</b> · modo: <b>${modeLabel}</b> · ${aggregate?'agrupado por contraparte':'una flecha por movimiento'} · ${represented} de ${totalForAccount} movimiento(s) representados${omittedByMode>0?` (${omittedByMode} excluido(s) por el modo elegido)`:''}${omittedByAmount>0?` · ${omittedByAmount} oculto(s) por el filtro de importe`:''}. Los importes positivos entran en la cuenta; los negativos salen de ella.</div>`;
+}
+
+/* ======================= GRAFO GENÉRICO (D3 force) ======================= */
+function renderForceGraph(containerId, nodes, links, opts={}){
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  if(!nodes.length || !links.length){
+    container.innerHTML = '<div class="note" style="padding:28px;border:0;">No hay relaciones que mostrar con el filtro actual.</div>';
+    return;
+  }
+  const width = container.clientWidth || 900;
+  const height = opts.bankLayout ? 560 : 480;
+
+  const svg = d3.select(container).append('svg').attr('width', '100%').attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+
+  const markerPrefix = `${containerId}-${Math.random().toString(36).slice(2,8)}`;
+  const markerIdFor = color => markerPrefix + '-arrow-' + color.replace('#','');
+  if(opts.directed){
+    const defs = svg.append('defs');
+    const colors = new Set(links.map(l => opts.linkColor ? opts.linkColor(l) : '#4a8f8c'));
+    colors.forEach(color=>{
+      defs.append('marker').attr('id',markerIdFor(color)).attr('viewBox','0 -4 8 8').attr('refX',7).attr('refY',0)
+        .attr('markerUnits','userSpaceOnUse').attr('markerWidth',8).attr('markerHeight',8).attr('orient','auto')
+        .append('path').attr('d','M0,-5L10,0L0,5').attr('fill',color);
+    });
+  }
+
+  const g = svg.append('g');
+  const maxVal = d3.max(links, l=>l.value) || 1;
+  const maxFlow = d3.max(nodes, n=>n.flow||1) || 1;
+  const radius = n => 7 + 15 * Math.sqrt(Math.max(0,n.flow||0) / maxFlow);
+  const lineWidth = l => 1.2 + 5 * Math.sqrt(Math.max(0,l.value||0) / maxVal);
+
+  // agrupar por par de nodos (sin importar dirección) para separar en abanico las flechas paralelas
+  const pairGroups = new Map();
+  links.forEach(l=>{
+    const key = [String(l.source), String(l.target)].sort().join('|');
+    if(!pairGroups.has(key)) pairGroups.set(key, []);
+    pairGroups.get(key).push(l);
+  });
+  pairGroups.forEach(group=>{ group.forEach((l,i)=>{ l._pairIndex = i; l._pairCount = group.length; }); });
+
+  const linkSel = g.append('g').selectAll('path').data(links).enter().append('path')
+    .attr('fill','none')
+    .attr('stroke', l => (opts.linkColor ? opts.linkColor(l) : '#4a8f8c'))
+    .attr('stroke-opacity', l => l._pairCount>1 ? 0.55 : 0.72)
+    .attr('stroke-width', lineWidth)
+    .attr('marker-end', l => opts.directed ? `url(#${markerIdFor(opts.linkColor ? opts.linkColor(l) : '#4a8f8c')})` : null);
+  linkSel.append('title').text(l => l.count>1
+    ? `${l.count} movimiento(s) · ${fmtEUR(l.value)} €`
+    : `${l.credit?'ENTRADA':'SALIDA'} · ${fmtEUR(l.value)} €${l.fecha?' · '+l.fecha:''}${l.concepto?' · '+l.concepto:''}${l.referencia?' · ref: '+l.referencia:''}`);
+
+  const linkLabelSel = opts.linkLabels ? g.append('g').selectAll('text').data(links).enter().append('text')
+    .text(l=>`${l.credit?'ENTRADA':'SALIDA'} · ${fmtEUR(l.value)} € · ${l.count} mov.`)
+    .attr('font-size',9).attr('fill','#c7c3b8').attr('font-family','var(--mono)')
+    .attr('text-anchor','middle').attr('dy',-4).style('pointer-events','none')
+    .style('paint-order','stroke').style('stroke', '#11151a').style('stroke-width', '4px').style('stroke-linejoin','round') : null;
+
+  const nodeSel = g.append('g').selectAll('circle').data(nodes).enter().append('circle')
+    .attr('r', radius)
+    .attr('fill', n => opts.colorBy ? opts.colorBy(n) : '#4a8f8c')
+    .attr('stroke', '#0d1013').attr('stroke-width', 1.2)
+    .style('cursor','pointer')
+    .on('click', (event,d)=>{ if(opts.onNodeClick) opts.onNodeClick(d.id, d); })
+    .call(d3.drag()
+      .on('start', (event,d)=>{ if(!event.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (event,d)=>{ d.fx=event.x; d.fy=event.y; })
+      .on('end', (event,d)=>{
+        if(!event.active) sim.alphaTarget(0);
+        if(opts.bankLayout && d.own){ d.fx=width/2; d.fy=height/2; }
+        else { d.fx=null; d.fy=null; }
+      }));
+
+  nodeSel.append('title').text(n => `${n.fullLabel||n.label}${n.flow?`\nvolumen total: ${fmtEUR(n.flow)} €`:''}`);
+
+  const labelSel = g.append('g').selectAll('text').data(nodes).enter().append('text')
+    .text(n=>n.label).attr('font-size',10).attr('fill','#b2bac0').attr('font-family','var(--sans)')
+    .attr('text-anchor','middle').attr('dy',n=>radius(n)+13).style('pointer-events','none')
+    .style('paint-order','stroke').style('stroke','#11151a').style('stroke-width','3px');
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(opts.bankLayout ? 145 : 110).strength(0.45))
+    .force('charge', d3.forceManyBody().strength(opts.bankLayout ? -520 : -300))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collision', d3.forceCollide().radius(n=>radius(n)+34).iterations(2));
+
+  if(opts.bankLayout){
+    nodes.filter(n=>n.own).forEach(n=>{ n.fx=width/2; n.fy=height/2; });
+    sim.force('ownX', d3.forceX(width/2).strength(n=>n.own ? 0.28 : 0.025));
+    sim.force('ownY', d3.forceY(height/2).strength(n=>n.own ? 0.28 : 0.025));
+  }
+
+  sim.on('tick', ()=>{
+    linkSel.attr('d',d=>{
+      const dx=d.target.x-d.source.x, dy=d.target.y-d.source.y, dist=Math.max(1,Math.hypot(dx,dy));
+      const sx=d.source.x+(dx/dist)*radius(d.source), sy=d.source.y+(dy/dist)*radius(d.source);
+      const tx=d.target.x-(dx/dist)*(radius(d.target)+7), ty=d.target.y-(dy/dist)*(radius(d.target)+7);
+      if(d._pairCount<=1) return `M${sx},${sy} L${tx},${ty}`;
+      const spacing = Math.min(16, 220/d._pairCount);
+      const bend = (d._pairIndex - (d._pairCount-1)/2) * spacing;
+      const mx=(sx+tx)/2-(dy/dist)*bend, my=(sy+ty)/2+(dx/dist)*bend;
+      return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
+    });
+    nodeSel.attr('cx',d=>d.x).attr('cy',d=>d.y);
+    labelSel.attr('x',d=>d.x).attr('y',d=>d.y);
+    if(linkLabelSel) linkLabelSel.attr('x',d=>(d.source.x+d.target.x)/2).attr('y',d=>(d.source.y+d.target.y)/2);
+  });
+
+  svg.call(d3.zoom().scaleExtent([0.3,4]).on('zoom', (event)=>{ g.attr('transform', event.transform); }));
+}
+
+/* ======================= TABLA DE MOVIMIENTOS ======================= */
+function currentVisibleRows(){
+  const search = (document.getElementById('txSearch').value||'').toLowerCase();
+  let rows = normalizedTx;
+  if(currentFilterAccount){
+    rows = rows.filter(t=>t.cuenta===currentFilterAccount || t.contraparte===currentFilterAccount);
+  }
+  if(search){
+    rows = rows.filter(t => (t.concepto||'').toLowerCase().includes(search) || (t.contraparte||'').toLowerCase().includes(search));
+  }
+  return rows;
+}
+function renderTxTable(){
+  const tbody = document.querySelector('#txTable tbody');
+  const rows = currentVisibleRows();
+  if(currentFilterAccount){
+    document.getElementById('tableFilterTag').style.display='inline-block';
+    document.getElementById('tableFilterTag').textContent = currentFilterAccount;
+    document.getElementById('clearFilterBtn').style.display='inline-block';
+  } else {
+    document.getElementById('tableFilterTag').style.display='none';
+    document.getElementById('clearFilterBtn').style.display='none';
+  }
+  tbody.innerHTML = rows.slice(0,2000).map(t=>`<tr>
+    <td><input type="checkbox" data-txid="${t._id}" ${selectedTxIds.has(t._id)?'checked':''} onchange="toggleTxSelection(${t._id}, this.checked)"></td>
+    <td>${escapeHtml(t.fecha)}</td>
+    <td>${escapeHtml(t.cuenta)}</td>
+    <td>${escapeHtml(t.contraparte)}</td>
+    <td style="white-space:normal;max-width:260px;">${escapeHtml(t.concepto)}</td>
+    <td class="${t.importe>=0?'pos':'neg'}">${t.importe.toFixed(2)}</td>
+    <td>${escapeHtml(t.saldo)}</td>
+    <td>${escapeHtml(t.origen)}</td>
+  </tr>`).join('');
+  const head = document.getElementById('txSelectAllHead');
+  if(head) head.checked = rows.length>0 && rows.every(t=>selectedTxIds.has(t._id));
+  const counter = document.getElementById('selCounter');
+  if(counter) counter.textContent = `${selectedTxIds.size} de ${normalizedTx.length} marcados`;
+}
+function toggleTxSelection(id, checked){
+  if(checked) selectedTxIds.add(id); else selectedTxIds.delete(id);
+  const counter = document.getElementById('selCounter');
+  if(counter) counter.textContent = `${selectedTxIds.size} de ${normalizedTx.length} marcados`;
+  const head = document.getElementById('txSelectAllHead');
+  if(head){ const rows = currentVisibleRows(); head.checked = rows.length>0 && rows.every(t=>selectedTxIds.has(t._id)); }
+}
+function selectAllVisible(mark){
+  currentVisibleRows().forEach(t=> mark ? selectedTxIds.add(t._id) : selectedTxIds.delete(t._id));
+  renderTxTable();
+}
+function clearTableFilter(){ currentFilterAccount = null; renderTxTable(); }
+function exportNormalized(){
+  if(!normalizedTx.length) return;
+  const csv = Papa.unparse(normalizedTx);
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'movimientos_normalizados.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ======================= HELPERS ======================= */
+function escapeHtml(str){
+  return (str===undefined||str===null) ? '' : String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+</script>
+</body>
+</html>
