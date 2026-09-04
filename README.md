@@ -4,7 +4,7 @@ Módulo de investigación financiera del kit **rastro**. Cuatro herramientas par
 
 **100% del lado del cliente. Sin backend, sin APIs externas, sin telemetría.** Todo el procesamiento ocurre en el navegador de quien lo usa; nada se envía a ningún servidor y nada se persiste entre sesiones.
 
-** Enlace a la herramienta: https://s3gad3.github.io/rastro-finint-
+** Enlace a la herramienta: https://s3gad3.github.io/rastro-finint
 
 ## Por qué existe
 
